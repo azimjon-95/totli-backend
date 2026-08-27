@@ -1,9 +1,83 @@
-# Production-oriented compose (build + run app services)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Full Dockerfiles will be added in production stage.
+# Production stack for a single VPS (Contabo, Hetzner, …).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Standalone file — do NOT combine it with docker-compose.yml, which is for
+# local development and publishes database ports.
+#
+# Mongo and Redis publish no ports at all: they are reachable only over the
+# private compose network. The API listens on 127.0.0.1 so that Nginx on the
+# host is the single entry point and TLS is never bypassed.
 
 services:
   mongodb:
+    image: mongo:7
+    container_name: totli-mongodb
     restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: totli
+    volumes:
+      - mongodb_data:/data/db
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [totli]
+
   redis:
+    image: redis:7-alpine
+    container_name: totli-redis
     restart: always
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [totli]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: totli-api:latest
+    container_name: totli-api
+    restart: always
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "4000"
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks: [totli]
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  totli:
+    driver: bridge

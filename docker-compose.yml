@@ -1,10 +1,12 @@
+# Local development: databases only. The API runs on the host via `npm run dev`.
+# Ports are bound to 127.0.0.1 so they are never reachable from outside the machine.
 services:
   mongodb:
     image: mongo:7
     container_name: totli-mongodb
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
     environment:
@@ -20,7 +22,7 @@ services:
     container_name: totli-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:

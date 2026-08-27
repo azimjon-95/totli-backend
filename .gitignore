@@ -39,7 +39,8 @@ tmp/
 temp/
 .turbo/
 uploads/
-backups/
+backups/*
+!backups/.gitkeep
 
 # Vite
 *.local
