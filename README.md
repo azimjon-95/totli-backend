@@ -32,7 +32,10 @@ totli-backend/
 │       └── scripts/seed.ts
 ├── packages/types/       # @totli/types — umumiy TypeScript tiplari
 ├── packages/shared/      # @totli/shared — umumiy konstantalar va utilitalar
-└── docker/               # nginx konfiguratsiyasi
+├── docker/               # nginx konfiguratsiyasi (VPS uchun)
+├── scripts/backup.sh     # kunlik MongoDB zaxira nusxasi
+├── Dockerfile            # production image (multi-stage)
+└── docker-compose.prod.yml
 ```
 
 ## Ishga tushirish
@@ -62,6 +65,20 @@ npm test
 
 > `dev`, `build`, `start` va `test` avtomatik ravishda `@totli/types` va `@totli/shared`
 > paketlarini oldin build qiladi — ular `dist/` dan yuklanadi.
+
+## Production (Contabo VPS)
+
+```bash
+git clone https://github.com/azimjon-95/totli-backend.git /opt/totli
+cd /opt/totli && cp .env.example .env && nano .env
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Mongo va Redis hech qanday portni tashqariga chiqarmaydi, API esa faqat
+`127.0.0.1:4000` da eshitadi — tashqi kirish yagona nuqta, Nginx orqali boradi.
+
+To'liq qo'llanma (firewall, TLS, DNS, zaxira nusxa, yangilash):
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Telegram guruh ID sini olish
 
