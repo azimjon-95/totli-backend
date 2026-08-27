@@ -2,7 +2,7 @@
  * Development seed — creates a SUPER_ADMIN if none exists.
  * Never runs automatically in production.
  *
- * Usage: npm run seed -w @totli/server
+ * Usage: npm run seed
  * Optional: SEED_ADMIN_PASSWORD, SEED_ADMIN_TELEGRAM_ID
  */
 import { connectDatabase, disconnectDatabase } from '../infrastructure/database/mongo.js';

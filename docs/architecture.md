@@ -9,22 +9,20 @@ Telegram Group
     ↓
 Telegram Bot
     ↓
-Telegram Mini App (apps/web)
+Telegram Mini App (totli-frontend)
     ↓
 Backend API (server)
     ↓
 MongoDB + Redis
     ↓
-Admin Panel (apps/admin) + Admin Telegram notifications
+Admin Panel (totli-frontend, admin domenida) + Admin Telegram notifications
 ```
 
-## Monorepo
+## Repolar
 
-- `apps/web` — Customer Telegram Mini App
-- `apps/admin` — Admin dashboard
-- `server` — Node.js API + Bot
-- `packages/types` — Shared TypeScript types
-- `packages/shared` — Shared constants & utilities
+- `totli-backend` (shu repo) — Node.js API + Telegram bot, Contabo VPS'da Docker orqali
+- `totli-frontend` — mijoz Mini App va admin panel bitta React ilovasida, Vercel'da
+  ikkita loyiha sifatida deploy qilinadi (rejim domen nomidan aniqlanadi)
 
 ## Data flow
 

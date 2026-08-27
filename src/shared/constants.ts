@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod, DeliveryType, UserRole } from '@totli/types';
+import type { OrderStatus, PaymentMethod, DeliveryType, UserRole } from './types.js';
 
 export const APP_NAME = 'TOTLI';
 export const APP_DESCRIPTION = 'Telegram orqali tort va shirinliklarga buyurtma';

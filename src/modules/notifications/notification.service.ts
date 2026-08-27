@@ -4,7 +4,7 @@ import { OrderModel } from '../orders/order.model.js';
 import { orderStatusKeyboard } from '../../bot/keyboards/orders.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../infrastructure/logger/index.js';
-import { formatPrice } from '@totli/shared';
+import { formatPrice } from '../../shared/format.js';
 import { onAppEvent } from '../../shared/events.js';
 
 const STATUS_CUSTOMER_MSG: Record<string, string> = {

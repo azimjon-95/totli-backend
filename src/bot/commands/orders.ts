@@ -1,6 +1,6 @@
 import { OrderModel } from '../../modules/orders/order.model.js';
 import { TelegramService } from '../../infrastructure/telegram/TelegramService.js';
-import { formatPrice } from '@totli/shared';
+import { formatPrice } from '../../shared/format.js';
 
 export async function handleOrders(chatId: number) {
   const orders = await OrderModel.find({ status: { $in: ['NEW', 'CONFIRMED', 'PREPARING'] } })

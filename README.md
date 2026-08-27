@@ -19,28 +19,27 @@ Mijoz Mini App'da tort tanlaydi va buyurtma beradi — admin Telegram guruhiga d
 ## Tuzilishi
 
 ```
-totli-backend/
-├── server/               # Express API + Telegram bot
-│   └── src/
-│       ├── config/           # env (zod bilan validatsiya)
-│       ├── infrastructure/   # mongo, redis, logger, telegram
-│       ├── middleware/       # auth, rate limit, security, error handler
-│       ├── modules/          # auth, products, categories, cart, orders,
-│       │                     # payments, delivery, statistics, settings...
-│       ├── bot/              # bot komandalar, callback'lar, klaviaturalar
-│       ├── shared/           # jwt, errors, permissions, pagination, cache
-│       └── scripts/seed.ts
-├── packages/types/       # @totli/types — umumiy TypeScript tiplari
-├── packages/shared/      # @totli/shared — umumiy konstantalar va utilitalar
-├── docker/               # nginx konfiguratsiyasi (VPS uchun)
-├── scripts/backup.sh     # kunlik MongoDB zaxira nusxasi
-├── Dockerfile            # production image (multi-stage)
-└── docker-compose.prod.yml
+src/
+├── index.ts              # kirish nuqtasi (HTTP server + bot)
+├── app.ts                # Express ilovasi va route'lar
+├── config/               # env (zod bilan validatsiya)
+├── infrastructure/       # mongo, redis, logger, telegram
+├── middleware/           # auth, rate limit, security, error handler
+├── modules/              # auth, products, categories, cart, orders,
+│                         # payments, delivery, statistics, settings...
+├── bot/                  # bot komandalar, callback'lar, klaviaturalar
+├── shared/               # tiplar, konstantalar, jwt, errors, permissions
+└── scripts/seed.ts
+
+docker/                   # nginx konfiguratsiyasi (VPS uchun)
+scripts/backup.sh         # kunlik MongoDB zaxira nusxasi
+Dockerfile                # production image (multi-stage)
+docker-compose.prod.yml
 ```
 
 ## Ishga tushirish
 
-Talab: Node.js >= 20.11, MongoDB, (ixtiyoriy) Redis.
+Talab: Node.js 22 (`.nvmrc` ga qarang), MongoDB, (ixtiyoriy) Redis.
 
 ```bash
 cp .env.example .env
@@ -57,14 +56,11 @@ npm run dev               # http://localhost:4000
 Boshqa buyruqlar:
 
 ```bash
-npm run build       # packages + server ni kompilyatsiya qiladi
+npm run build       # TypeScript → dist/
 npm start           # production rejimida ishga tushiradi
 npm run typecheck
 npm test
 ```
-
-> `dev`, `build`, `start` va `test` avtomatik ravishda `@totli/types` va `@totli/shared`
-> paketlarini oldin build qiladi — ular `dist/` dan yuklanadi.
 
 ## Production (Contabo VPS)
 

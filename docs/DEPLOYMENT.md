@@ -149,7 +149,7 @@ Birinchi marta admin va boshlang'ich ma'lumotlarni yarating:
 
 ```bash
 # .env ga SEED_ADMIN_PASSWORD qo'shing, keyin:
-docker compose -f docker-compose.prod.yml exec api node server/dist/scripts/seed.js
+docker compose -f docker-compose.prod.yml exec api node dist/scripts/seed.js
 ```
 
 Tekshirish:
