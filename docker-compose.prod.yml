@@ -1,0 +1,9 @@
+# Production-oriented compose (build + run app services)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Full Dockerfiles will be added in production stage.
+
+services:
+  mongodb:
+    restart: always
+  redis:
+    restart: always

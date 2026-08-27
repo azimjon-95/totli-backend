@@ -1,0 +1,23 @@
+{
+  "name": "totli-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:packages": "npm run build -w @totli/types && npm run build -w @totli/shared",
+    "predev": "npm run build:packages",
+    "dev": "npm run dev -w @totli/server",
+    "build": "npm run build:packages && npm run build -w @totli/server",
+    "start": "npm run start -w @totli/server",
+    "typecheck": "npm run build:packages && npm run typecheck -w @totli/server",
+    "test": "npm run build:packages && npm run test -w @totli/server",
+    "seed": "npm run build:packages && npm run seed -w @totli/server",
+    "clean": "rm -rf server/dist packages/*/dist"
+  },
+  "engines": {
+    "node": ">=20.11.0"
+  }
+}
