@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { securityHeaders, corsMiddleware } from './middleware/security.js';
 import { requestLogger } from './middleware/requestLogger.js';
@@ -59,29 +59,40 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-  app.use('/api/v1/health', healthRoutes);
-  app.use('/api/v1/auth', authRateLimit, authRoutes);
-  app.use('/api/v1/categories', categoryPublicRoutes);
-  app.use('/api/v1/products', searchRateLimit, productPublicRoutes);
+  // Every route is registered on a single v1 router, which is then mounted at
+  // both `/api/v1` and `/v1`. Some reverse proxies forward `/api/…` untouched,
+  // others strip the prefix (`proxy_pass http://host:port/;` with a trailing
+  // slash does). Mounting twice makes the API behave identically either way,
+  // so a proxy tweak can never turn into a silent 404 storm.
+  const v1 = Router();
 
-  app.use('/api/v1/cart', cartRoutes);
-  app.use('/api/v1/orders', orderRateLimit, orderCustomerRoutes);
-  app.use('/api/v1/analytics', analyticsPublicRoutes);
-  app.use('/api/v1/payments', paymentRoutes);
-  app.use('/api/v1/delivery', deliveryRoutes);
-  app.use('/api/v1/settings', settingsPublicRoutes);
+  v1.use('/health', healthRoutes);
+  v1.use('/auth', authRateLimit, authRoutes);
+  v1.use('/categories', categoryPublicRoutes);
+  v1.use('/products', searchRateLimit, productPublicRoutes);
 
-  app.use('/api/v1/admin/categories', categoryAdminRoutes);
-  app.use('/api/v1/admin/products', productAdminRoutes);
-  app.use('/api/v1/admin/orders', orderAdminRoutes);
-  app.use('/api/v1/admin/statistics', statisticsRoutes);
-  app.use('/api/v1/admin/customers', customersAdminRoutes);
-  app.use('/api/v1/admin/analytics', analyticsAdminRoutes);
-  app.use('/api/v1/admin/settings', settingsAdminRoutes);
+  v1.use('/cart', cartRoutes);
+  v1.use('/orders', orderRateLimit, orderCustomerRoutes);
+  v1.use('/analytics', analyticsPublicRoutes);
+  v1.use('/payments', paymentRoutes);
+  v1.use('/delivery', deliveryRoutes);
+  v1.use('/settings', settingsPublicRoutes);
+
+  v1.use('/admin/categories', categoryAdminRoutes);
+  v1.use('/admin/products', productAdminRoutes);
+  v1.use('/admin/orders', orderAdminRoutes);
+  v1.use('/admin/statistics', statisticsRoutes);
+  v1.use('/admin/customers', customersAdminRoutes);
+  v1.use('/admin/analytics', analyticsAdminRoutes);
+  v1.use('/admin/settings', settingsAdminRoutes);
+
+  app.use('/api/v1', v1);
+  app.use('/v1', v1);
 
   app.use('/api/health', healthRoutes);
+  app.use('/health', healthRoutes);
 
-  app.get('/api', (_req, res) => {
+  app.get(['/api', '/'], (_req, res) => {
     res.json({ success: true, data: { message: 'TOTLI API', version: '1.0.0' } });
   });
 
