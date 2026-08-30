@@ -9,6 +9,7 @@ import { connectRedis, disconnectRedis } from './infrastructure/redis/client.js'
 import { env, isProd } from './config/env.js';
 import { logger } from './infrastructure/logger/index.js';
 import { startBot, stopBot } from './bot/bot.js';
+import { ensureBootstrapAdmin } from './modules/admins/admin.bootstrap.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 
 async function bootstrap() {
@@ -19,6 +20,17 @@ async function bootstrap() {
   if (getConnectionState() !== 1 && isProd) {
     logger.error('MongoDB not connected — refusing to start in production');
     process.exit(1);
+  }
+
+  if (getConnectionState() === 1) {
+    try {
+      await ensureBootstrapAdmin();
+    } catch (err) {
+      // A failed bootstrap must not take the API down; log and continue.
+      logger.error('Bootstrap admin failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   await connectRedis();

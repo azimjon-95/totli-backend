@@ -33,6 +33,10 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
 
   ADMIN_TELEGRAM_IDS: z.string().optional(),
+
+  // Admin panelga kirish (server ishga tushganda avtomatik yaratiladi)
+  ADMIN_LOGIN: z.string().optional(),
+  ADMIN_PASSWORD: z.string().optional(),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
 
   // Payments (optional — NOT_CONFIGURED if missing)
