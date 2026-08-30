@@ -10,6 +10,7 @@ import { env, isProd } from './config/env.js';
 import { logger } from './infrastructure/logger/index.js';
 import { startBot, stopBot } from './bot/bot.js';
 import { ensureBootstrapAdmin } from './modules/admins/admin.bootstrap.js';
+import { ensureStaticCategories } from './modules/categories/category.bootstrap.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 
 async function bootstrap() {
@@ -25,9 +26,10 @@ async function bootstrap() {
   if (getConnectionState() === 1) {
     try {
       await ensureBootstrapAdmin();
+      await ensureStaticCategories();
     } catch (err) {
       // A failed bootstrap must not take the API down; log and continue.
-      logger.error('Bootstrap admin failed', {
+      logger.error('Startup bootstrap failed', {
         error: err instanceof Error ? err.message : String(err),
       });
     }

@@ -4,6 +4,7 @@ import { securityHeaders, corsMiddleware } from './middleware/security.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import uploadRoutes from './modules/uploads/upload.routes.js';
 import { authRateLimit, orderRateLimit, searchRateLimit } from './middleware/rateLimits.js';
 import healthRoutes from './modules/health/health.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
@@ -85,6 +86,7 @@ export function createApp() {
   v1.use('/admin/customers', customersAdminRoutes);
   v1.use('/admin/analytics', analyticsAdminRoutes);
   v1.use('/admin/settings', settingsAdminRoutes);
+  v1.use('/admin/uploads', uploadRoutes);
 
   app.use('/api/v1', v1);
   app.use('/v1', v1);
