@@ -38,7 +38,7 @@ coverage/
 tmp/
 temp/
 .turbo/
-uploads/
+/uploads/
 backups/*
 !backups/.gitkeep
 
