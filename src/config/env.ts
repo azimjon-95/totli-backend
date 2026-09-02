@@ -23,6 +23,9 @@ const envSchema = z.object({
   WEBAPP_URL: z.string().optional(),
   ADMIN_URL: z.string().optional(),
 
+  // Mini App'dagi qo'ng'iroq tugmasi shu raqamga tel: havolasi ochadi.
+  CONTACT_PHONE: z.string().optional(),
+
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default('7d'),
   JWT_ADMIN_EXPIRES_IN: z.string().default('8h'),

@@ -134,9 +134,12 @@ export const NotificationService = {
     const order = await OrderModel.findById(orderId).lean();
     if (!order) return;
 
-    const chatId = env.ADMIN_CHAT_ID || env.TELEGRAM_GROUP_ID;
+    // The admin group is the primary destination — several admins can see
+    // and act on an order there. ADMIN_CHAT_ID (a single person's chat) is
+    // only a fallback for setups that haven't moved to a group yet.
+    const chatId = env.TELEGRAM_GROUP_ID || env.ADMIN_CHAT_ID;
     if (!chatId) {
-      logger.warn('ADMIN_CHAT_ID / TELEGRAM_GROUP_ID not set — skip admin notification');
+      logger.warn('TELEGRAM_GROUP_ID / ADMIN_CHAT_ID not set — skip admin notification');
       return;
     }
 

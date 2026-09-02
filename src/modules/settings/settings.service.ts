@@ -1,4 +1,5 @@
 import { getSetting, setSetting } from '../notifications/settings.model.js';
+import { env } from '../../config/env.js';
 import { sanitizePlainText } from '../../shared/sanitize.js';
 
 export type SlideKind = 'image' | 'video';
@@ -30,6 +31,11 @@ export interface BannerSettings {
   ctaLink: string;
   slides: BannerSlide[];
 }
+
+/** What `setBanner` accepts: slides may omit `id`/`kind` — `normalizeSlide` fills them in. */
+export type BannerInput = Partial<Omit<BannerSettings, 'slides'>> & {
+  slides?: Partial<BannerSlide>[];
+};
 
 const DEFAULT_BANNER: BannerSettings = {
   title: 'Bugun siz uchun qanday tort?',
@@ -83,6 +89,16 @@ function normalizeSlide(input: unknown, index: number): BannerSlide | null {
 }
 
 export const SettingsService = {
+  /**
+   * Contact phone lives in `.env`, not the database — it changes rarely and
+   * shouldn't need a database round trip or an admin-panel form of its own.
+   * Riding along on the banner response (already fetched on every home page
+   * load) means the client needs no extra request for the phone button.
+   */
+  getContactPhone(): string | null {
+    return env.CONTACT_PHONE || null;
+  },
+
   async getBanner(): Promise<BannerSettings> {
     const saved = await getSetting<Partial<BannerSettings>>('web_banner');
     const banner = { ...DEFAULT_BANNER, ...(saved || {}) };
@@ -107,7 +123,7 @@ export const SettingsService = {
     return banner;
   },
 
-  async setBanner(input: Partial<BannerSettings>): Promise<BannerSettings> {
+  async setBanner(input: BannerInput): Promise<BannerSettings> {
     const current = await this.getBanner();
 
     const slides = Array.isArray(input.slides)
