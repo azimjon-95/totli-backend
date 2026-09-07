@@ -16,6 +16,7 @@ import {
   productPublicRoutes,
   productAdminRoutes,
 } from './modules/products/product.routes.js';
+import { menuPublicRoutes } from './modules/menu/menu.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import {
   orderCustomerRoutes,
@@ -71,6 +72,7 @@ export function createApp() {
   v1.use('/auth', authRateLimit, authRoutes);
   v1.use('/categories', categoryPublicRoutes);
   v1.use('/products', searchRateLimit, productPublicRoutes);
+  v1.use('/menu', menuPublicRoutes);
 
   v1.use('/cart', cartRoutes);
   v1.use('/orders', orderRateLimit, orderCustomerRoutes);
