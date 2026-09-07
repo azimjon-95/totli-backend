@@ -3,6 +3,7 @@ import { ProductModel } from '../products/product.model.js';
 import { slugify } from '../../shared/slug.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js';
 import { cacheGet, cacheSet, cacheDel } from '../../shared/cache.js';
+import { MenuService } from '../menu/menu.service.js';
 
 function toDto(doc: Record<string, unknown>) {
   return {
@@ -69,6 +70,7 @@ export const CategoryService = {
       isActive: input.isActive ?? true,
     });
     await cacheDel('categories:public');
+    await MenuService.invalidate();
     return toDto(cat.toObject());
   },
 
@@ -99,6 +101,7 @@ export const CategoryService = {
     const updated = await CategoryRepository.updateById(id, data);
     if (!updated) throw new NotFoundError('Category not found');
     await cacheDel('categories:public');
+    await MenuService.invalidate();
     return toDto(updated.toObject());
   },
 
@@ -115,6 +118,7 @@ export const CategoryService = {
 
     await CategoryRepository.deleteById(id);
     await cacheDel('categories:public');
+    await MenuService.invalidate();
     return { deleted: true };
   },
 };

@@ -94,9 +94,30 @@ Barcha yo'llar `/api/v1` prefiksi bilan. Javob formati: `{ success, data }` yoki
 | POST | `/auth/telegram` | Mini App `initData` orqali kirish |
 | GET | `/categories`, `/categories/:slug` | Kategoriyalar |
 | GET | `/products`, `/products/:slug` | Mahsulotlar (qidiruv, filtr, sahifalash) |
+| GET | `/menu`, `/menu/:slug` | To'liq menyu: kategoriyalar + ichidagi taomlar (QR sahifasi uchun) |
 | GET | `/settings/banner` | Bosh sahifa banneri |
 | GET/POST | `/delivery/zones`, `/delivery/quote` | Yetkazib berish narxi |
 | GET | `/payments/providers` | To'lov provayderlari holati |
+
+### Menyu (`GET /menu`)
+
+QR orqali ochiladigan sahifa uchun butun menyu bitta so'rovda qaytadi: faol
+kategoriyalar `sortOrder` bo'yicha tartiblangan holda, har birining ichida
+mahsulotlari bilan.
+
+| Query | Qiymat | Tavsif |
+|---|---|---|
+| `lang` | `uz` \| `ru` \| `en` | Ko'p tilli maydonlarni bitta satrga yig'adi (`uz` — zaxira). |
+| `category` | slug | Faqat bitta bo'lim. `GET /menu/:slug` ham shuni qiladi. |
+| `available` | `true` | Tugab qolgan taomlarni chiqarib tashlaydi. |
+| `includeEmpty` | `true` | Mahsulotsiz bo'limlarni ham qoldiradi (odatda yashiriladi). |
+
+Javob: `{ categories, totals: { categories, products }, updatedAt, generatedAt }`.
+`updatedAt` — payload'dagi eng so'nggi o'zgarish vaqti, klient menyu
+o'zgarmaganini shundan biladi.
+
+Menyu Redis'da bitta kalit (`menu:public`, 60 s) ostida keshlanadi va
+kategoriya/mahsulot yozilganda darhol tozalanadi.
 
 ### Mijoz (JWT talab qilinadi)
 

@@ -5,6 +5,7 @@ import { slugify } from '../../shared/slug.js';
 import { paginateMeta } from '../../shared/pagination.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors.js';
 import { cacheGet, cacheSet, cacheDel } from '../../shared/cache.js';
+import { MenuService } from '../menu/menu.service.js';
 
 function normalizeImages(images: unknown[] | undefined): string[] {
   if (!images) return [];
@@ -133,6 +134,7 @@ export const ProductService = {
       images: normalizeImages(input.images as unknown[]),
     });
     await cacheDel('categories:public');
+    await MenuService.invalidate();
     return toDto(product.toObject());
   },
 
@@ -162,6 +164,7 @@ export const ProductService = {
 
     const updated = await ProductRepository.updateById(id, input);
     if (!updated) throw new NotFoundError('Product not found');
+    await MenuService.invalidate();
     return toDto(updated.toObject());
   },
 
@@ -169,6 +172,7 @@ export const ProductService = {
     const existing = await ProductRepository.findById(id);
     if (!existing) throw new NotFoundError('Product not found');
     await ProductRepository.deleteById(id);
+    await MenuService.invalidate();
     return { deleted: true };
   },
 };
