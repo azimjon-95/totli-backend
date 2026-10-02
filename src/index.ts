@@ -10,7 +10,7 @@ import { env, isProd } from './config/env.js';
 import { logger } from './infrastructure/logger/index.js';
 import { startBot, stopBot } from './bot/bot.js';
 import { ensureBootstrapAdmin } from './modules/admins/admin.bootstrap.js';
-import { ensureStaticCategories } from './modules/categories/category.bootstrap.js';
+import { CatalogService, startCatalogRefresher } from './modules/catalog/catalog.service.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 
 async function bootstrap() {
@@ -26,7 +26,6 @@ async function bootstrap() {
   if (getConnectionState() === 1) {
     try {
       await ensureBootstrapAdmin();
-      await ensureStaticCategories();
     } catch (err) {
       // A failed bootstrap must not take the API down; log and continue.
       logger.error('Startup bootstrap failed', {
@@ -36,6 +35,12 @@ async function bootstrap() {
   }
 
   await connectRedis();
+
+  // Fill the catalog cache now so the first customer doesn't pay for the fetch.
+  // A failure is logged by the cache; the API still starts and retries on demand.
+  CatalogService.warmUp().catch(() => undefined);
+  // …and keep it fresh with no customer waiting on a refresh.
+  const stopCatalogRefresher = startCatalogRefresher();
 
   // Order events → notifications
   NotificationService.registerEventHandlers();
@@ -57,6 +62,7 @@ async function bootstrap() {
     shuttingDown = true;
     logger.info(`${signal} received, shutting down gracefully`);
 
+    stopCatalogRefresher();
     await stopBot();
 
     httpServer.close(async () => {

@@ -4,6 +4,7 @@ import { getRedis } from '../../infrastructure/redis/client.js';
 import { sendSuccess, sendError } from '../../shared/response.js';
 import { paymentProviderStatus } from '../../config/env.js';
 import { TelegramService } from '../../infrastructure/telegram/TelegramService.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 
 export function healthCheck(_req: Request, res: Response) {
   const dbState = getConnectionState();
@@ -22,6 +23,8 @@ export function healthCheck(_req: Request, res: Response) {
     database,
     redis: redisStatus,
     telegram: TelegramService.isConfigured() ? 'configured' : 'not_configured',
+    // Cache state only — health checks must not depend on (or hammer) the upstream.
+    catalog: CatalogService.status(),
     payments: paymentProviderStatus(),
     timestamp: new Date().toISOString(),
   };

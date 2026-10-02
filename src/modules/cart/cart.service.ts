@@ -1,6 +1,7 @@
-import mongoose from 'mongoose';
 import { CartRepository } from './cart.repository.js';
-import { ProductRepository } from '../products/product.repository.js';
+import { CatalogService } from '../catalog/catalog.service.js';
+import { catalogIdSchema } from '../catalog/catalog.validation.js';
+import { priceProduct } from '../catalog/catalog.pricing.js';
 import { sanitizePlainText } from '../../shared/sanitize.js';
 import { NotFoundError, ValidationError } from '../../shared/errors.js';
 
@@ -38,41 +39,31 @@ export const CartService = {
     userId: string,
     input: { productId: string; quantity: number; variantName?: string; cakeMessage?: string }
   ) {
-    if (!mongoose.Types.ObjectId.isValid(input.productId)) {
+    if (!catalogIdSchema.safeParse(input.productId).success) {
       throw new ValidationError('Invalid productId');
     }
 
-    const product = await ProductRepository.findById(input.productId);
+    const product = (await CatalogService.lookup())(input.productId);
     if (!product) throw new NotFoundError('Product not found');
     if (!product.isAvailable) {
       throw new ValidationError('Product is not available for purchase');
     }
 
-    // Resolve price from DB — never trust client
-    let price = product.price;
-    let name =
-      typeof product.name === 'object' && product.name && 'uz' in product.name
-        ? String((product.name as { uz: string }).uz)
-        : 'Product';
-
-    if (input.variantName && product.variants?.length) {
-      const variant = product.variants.find((v) => v.name === input.variantName);
-      if (!variant) throw new ValidationError('Invalid product variant');
-      price = variant.price;
-      name = `${name} (${variant.name})`;
-    }
+    // Priced from the catalog — never from the client.
+    const priced = priceProduct(product, input.variantName);
+    const { unitPrice: price, name, variantName } = priced;
 
     const cakeMessage = input.cakeMessage
       ? sanitizePlainText(input.cakeMessage, 150)
       : undefined;
 
     const cart = await CartRepository.getOrCreate(userId);
-    const key = itemKey(input.productId, input.variantName);
+    const key = itemKey(input.productId, variantName);
     const existingIdx = cart.items.findIndex(
       (i) => itemKey(String(i.productId), i.variantName) === key
     );
 
-    const image = product.images?.[0];
+    const image = product.images[0];
 
     if (existingIdx >= 0) {
       const nextQty = cart.items[existingIdx].quantity + input.quantity;
@@ -83,7 +74,7 @@ export const CartService = {
     } else {
       cart.items.push({
         productId: product._id,
-        variantName: input.variantName,
+        variantName,
         quantity: input.quantity,
         price,
         name,
@@ -112,16 +103,12 @@ export const CartService = {
     if (input.quantity === 0) {
       cart.items.splice(idx, 1);
     } else {
-      // Refresh price from product
-      const product = await ProductRepository.findById(productId);
+      // Refresh the price from the catalog.
+      const product = (await CatalogService.lookup())(productId);
       if (!product || !product.isAvailable) {
         throw new ValidationError('Product is not available');
       }
-      let price = product.price;
-      if (input.variantName && product.variants?.length) {
-        const variant = product.variants.find((v) => v.name === input.variantName);
-        if (variant) price = variant.price;
-      }
+      const { unitPrice: price } = priceProduct(product, input.variantName);
       cart.items[idx].quantity = input.quantity;
       cart.items[idx].price = price;
       if (input.cakeMessage !== undefined) {

@@ -26,6 +26,15 @@ const envSchema = z.object({
   // Mini App'dagi qo'ng'iroq tugmasi shu raqamga tel: havolasi ochadi.
   CONTACT_PHONE: z.string().optional(),
 
+  // Mahsulotlar va kategoriyalar manbasi (MongoDB'da saqlanmaydi).
+  LOKMAGO_CATALOG_URL: z
+    .string()
+    .url()
+    .default('https://api.lokmago.uz/j/4454/6a5ff4869a705be4489f06b6'),
+  LOKMAGO_CACHE_TTL_SEC: z.coerce.number().int().min(10).max(3600).default(180),
+  // Taom LokmaGo'dan shuncha ketma-ket tekshiruvda kelmasa, admin bergan kategoriyasi o'chadi.
+  CATALOG_MISS_LIMIT: z.coerce.number().int().min(1).max(20).default(3),
+
   JWT_SECRET: z.string().min(16),
   JWT_EXPIRES_IN: z.string().default('7d'),
   JWT_ADMIN_EXPIRES_IN: z.string().default('8h'),

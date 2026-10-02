@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Request, Response, NextFunction } from 'express';
 import { UserModel } from './user.model.js';
 import { OrderModel } from '../orders/order.model.js';
 import { requireAdminAuth, requirePermission } from '../../middleware/auth.js';

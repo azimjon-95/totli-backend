@@ -62,7 +62,7 @@ function normalizeSlide(input: unknown, index: number): BannerSlide | null {
   const raw = input as Record<string, unknown>;
 
   const url = trimUrl(raw.url);
-  if (!url) return null;
+  if (!url || !isSafeMediaUrl(url)) return null;
 
   const kind: SlideKind = raw.kind === 'video' ? 'video' : 'image';
 
@@ -79,12 +79,80 @@ function normalizeSlide(input: unknown, index: number): BannerSlide | null {
     id: sanitizePlainText(String(raw.id ?? ''), 40) || `slide-${index + 1}`,
     kind,
     url,
-    posterUrl: trimUrl(raw.posterUrl) || undefined,
+    posterUrl: isSafeMediaUrl(trimUrl(raw.posterUrl)) ? trimUrl(raw.posterUrl) : undefined,
     title: sanitizePlainText(String(raw.title ?? ''), 120) || undefined,
     subtitle: sanitizePlainText(String(raw.subtitle ?? ''), 300) || undefined,
     ctaText: sanitizePlainText(String(raw.ctaText ?? ''), 60) || undefined,
-    ctaLink: trimUrl(raw.ctaLink, 120) || undefined,
+    ctaLink: isSafeLink(trimUrl(raw.ctaLink, 120)) ? trimUrl(raw.ctaLink, 120) : undefined,
     durationMs,
+  };
+}
+
+/**
+ * Only an `https://` URL is shown, and a link may only stay inside the app
+ * (`/catalog`) or go to an `https://` address. This is also what the route
+ * validates; repeating it here keeps stored data clean whatever calls in.
+ */
+export function isSafeMediaUrl(value: string): boolean {
+  return /^https:\/\/\S+$/i.test(value);
+}
+
+export function isSafeLink(value: string): boolean {
+  return /^\/(?!\/)\S*$/.test(value) || isSafeMediaUrl(value);
+}
+
+/**
+ * Stored banner → what is served. A banner saved before slides existed still
+ * carries an `imageUrl`; it is surfaced as one slide so the storefront only
+ * ever deals with a single shape.
+ */
+export function resolveBanner(saved: Partial<BannerSettings> | null | undefined): BannerSettings {
+  const banner: BannerSettings = { ...DEFAULT_BANNER, ...(saved ?? {}) };
+  if (!Array.isArray(banner.slides)) banner.slides = [];
+
+  if (banner.slides.length === 0 && banner.imageUrl) {
+    banner.slides = [
+      {
+        id: 'legacy',
+        kind: 'image',
+        url: banner.imageUrl,
+        title: banner.title,
+        subtitle: banner.subtitle,
+        ctaText: banner.ctaText,
+        ctaLink: banner.ctaLink,
+        durationMs: DEFAULT_IMAGE_DURATION_MS,
+      },
+    ];
+  }
+  return banner;
+}
+
+/**
+ * Applies an admin's edit to the current banner.
+ *
+ * When the edit carries a `slides` list it is authoritative — including an
+ * empty one, which clears the carousel — and the legacy `imageUrl` is retired,
+ * otherwise an old image would reappear as a slide the admin had just removed.
+ */
+export function mergeBanner(current: BannerSettings, input: BannerInput): BannerSettings {
+  const slidesGiven = Array.isArray(input.slides);
+
+  const slides = slidesGiven
+    ? input.slides!
+        .slice(0, MAX_SLIDES)
+        .map(normalizeSlide)
+        .filter((slide): slide is BannerSlide => slide !== null)
+    : current.slides;
+
+  const ctaLink = trimUrl((input.ctaLink ?? current.ctaLink) || '/catalog', 120);
+
+  return {
+    title: sanitizePlainText(input.title ?? current.title, 120) || current.title,
+    subtitle: sanitizePlainText(input.subtitle ?? current.subtitle, 300) || current.subtitle,
+    imageUrl: slidesGiven ? '' : trimUrl(input.imageUrl ?? current.imageUrl, 500),
+    ctaText: sanitizePlainText(input.ctaText ?? current.ctaText, 60) || current.ctaText,
+    ctaLink: isSafeLink(ctaLink) ? ctaLink : '/catalog',
+    slides,
   };
 }
 
@@ -99,49 +167,13 @@ export const SettingsService = {
     return env.CONTACT_PHONE || null;
   },
 
+  /** The banner is edited in the TOTLI admin panel and stored in MongoDB — never taken from LokmaGo. */
   async getBanner(): Promise<BannerSettings> {
-    const saved = await getSetting<Partial<BannerSettings>>('web_banner');
-    const banner = { ...DEFAULT_BANNER, ...(saved || {}) };
-
-    // A banner saved before slides existed still has an imageUrl; surface it
-    // as a single slide so the storefront only ever deals with one shape.
-    if (banner.slides.length === 0 && banner.imageUrl) {
-      banner.slides = [
-        {
-          id: 'legacy',
-          kind: 'image',
-          url: banner.imageUrl,
-          title: banner.title,
-          subtitle: banner.subtitle,
-          ctaText: banner.ctaText,
-          ctaLink: banner.ctaLink,
-          durationMs: DEFAULT_IMAGE_DURATION_MS,
-        },
-      ];
-    }
-
-    return banner;
+    return resolveBanner(await getSetting<Partial<BannerSettings>>('web_banner'));
   },
 
   async setBanner(input: BannerInput): Promise<BannerSettings> {
-    const current = await this.getBanner();
-
-    const slides = Array.isArray(input.slides)
-      ? input.slides
-          .slice(0, MAX_SLIDES)
-          .map(normalizeSlide)
-          .filter((s): s is BannerSlide => s !== null)
-      : current.slides;
-
-    const next: BannerSettings = {
-      title: sanitizePlainText(input.title ?? current.title, 120) || current.title,
-      subtitle: sanitizePlainText(input.subtitle ?? current.subtitle, 300) || current.subtitle,
-      imageUrl: trimUrl(input.imageUrl ?? current.imageUrl, 500),
-      ctaText: sanitizePlainText(input.ctaText ?? current.ctaText, 60) || current.ctaText,
-      ctaLink: trimUrl((input.ctaLink ?? current.ctaLink) || '/catalog', 120),
-      slides,
-    };
-
+    const next = mergeBanner(await SettingsService.getBanner(), input);
     await setSetting('web_banner', next);
     return next;
   },

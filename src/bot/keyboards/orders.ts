@@ -1,6 +1,5 @@
 export function orderStatusKeyboard(orderId: string) {
   // callback: os:{orderId}:{STATUS}
-  const short = orderId.slice(-8);
   return {
     inline_keyboard: [
       [

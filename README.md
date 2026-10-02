@@ -25,7 +25,7 @@ src/
 ├── config/               # env (zod bilan validatsiya)
 ├── infrastructure/       # mongo, redis, logger, telegram
 ├── middleware/           # auth, rate limit, security, error handler
-├── modules/              # auth, products, categories, cart, orders,
+├── modules/              # auth, catalog (LokmaGo), cart, orders,
 │                         # payments, delivery, statistics, settings...
 ├── bot/                  # bot komandalar, callback'lar, klaviaturalar
 ├── shared/               # tiplar, konstantalar, jwt, errors, permissions
@@ -76,11 +76,22 @@ Mongo va Redis hech qanday portni tashqariga chiqarmaydi, API esa faqat
 To'liq qo'llanma (firewall, TLS, DNS, zaxira nusxa, yangilash):
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
+## Katalog
+
+Mahsulotlar va kategoriyalar **LokmaGo**'dan keladi va MongoDB'da saqlanmaydi — faqat admin
+qo'lda bergan "taom → kategoriya" tanlovlari saqlanadi. LokmaGo kategoriyalari dasturning
+kategoriyalariga moslanadi, mos kelmaganlari o'z nomi bilan ko'rsatiladi.
+Banner esa TOTLI admin panelidan boshqariladi.
+
+Batafsil (kesh, "3 tekshiruv" qoidasi, API, banner, guruh pin xabari): [`docs/CATALOG.md`](docs/CATALOG.md).
+
 ## Telegram guruh ID sini olish
 
 1. Botni guruhga admin sifatida qo'shing
 2. Guruhga biror xabar yozing
 3. `https://api.telegram.org/bot<TOKEN>/getUpdates` ni oching va `chat.id` ni oling (odatda `-100...` bilan boshlanadi)
+
+Bot buyruqlari (adminlar uchun): `/orders`, `/today`, `/check` (guruhdagi pin tugmasini tekshirish), `/setup`.
 
 ## API
 
@@ -92,8 +103,8 @@ Barcha yo'llar `/api/v1` prefiksi bilan. Javob formati: `{ success, data }` yoki
 |---|---|---|
 | GET | `/health`, `/health/ready`, `/health/live` | Holat tekshiruvi |
 | POST | `/auth/telegram` | Mini App `initData` orqali kirish |
-| GET | `/categories`, `/categories/:slug` | Kategoriyalar |
-| GET | `/products`, `/products/:slug` | Mahsulotlar (qidiruv, filtr, sahifalash) |
+| GET | `/categories`, `/categories/:slug` | Kategoriyalar (LokmaGo'dan, kesh orqali) |
+| GET | `/products`, `/products/:id` | Mahsulotlar (LokmaGo'dan; qidiruv, filtr, sahifalash) |
 | GET | `/settings/banner` | Bosh sahifa banneri |
 | GET/POST | `/delivery/zones`, `/delivery/quote` | Yetkazib berish narxi |
 | GET | `/payments/providers` | To'lov provayderlari holati |
@@ -112,7 +123,8 @@ Barcha yo'llar `/api/v1` prefiksi bilan. Javob formati: `{ success, data }` yoki
 | Metod | Yo'l |
 |---|---|
 | POST | `/auth/admin/login` |
-| GET/POST/PATCH/DELETE | `/admin/products`, `/admin/categories` |
+| GET | `/admin/products`, `/admin/categories` (faqat o'qish) |
+| PUT/DELETE | `/admin/products/:id/category` (taomni kategoriyaga o'tkazish) |
 | GET/PATCH | `/admin/orders`, `/admin/orders/:id` |
 | GET | `/admin/customers`, `/admin/statistics/dashboard`, `/admin/statistics/overview` |
 | GET/PUT | `/admin/settings/banner` |

@@ -3,13 +3,23 @@ import { logger } from '../logger/index.js';
 
 type TgResponse<T> = { ok: boolean; result?: T; description?: string; error_code?: number };
 
-async function callApi<T>(
+export type TgCallResult<T> =
+  | { ok: true; result: T | null }
+  | {
+      ok: false;
+      code?: number;
+      description?: string;
+      /** True when no HTTP answer came back at all (DNS, reset, timeout). */
+      network?: boolean;
+    };
+
+/** Like `callApi`, but keeps the reason a call failed. Does not log. */
+async function callApiDetailed<T>(
   method: string,
   body?: Record<string, unknown>
-): Promise<T | null> {
+): Promise<TgCallResult<T>> {
   if (!env.TELEGRAM_BOT_TOKEN) {
-    logger.warn(`Telegram ${method} skipped — no bot token`);
-    return null;
+    return { ok: false, description: 'no bot token' };
   }
 
   try {
@@ -23,22 +33,104 @@ async function callApi<T>(
     );
     const data = (await res.json()) as TgResponse<T>;
     if (!data.ok) {
-      logger.error(`Telegram ${method} failed`, {
-        code: data.error_code,
-        description: data.description,
-      });
-      if (data.error_code === 429) {
-        // Rate limited — caller may retry
-      }
-      return null;
+      return { ok: false, code: data.error_code, description: data.description };
     }
-    return data.result ?? null;
+    return { ok: true, result: data.result ?? null };
   } catch (err) {
-    logger.error(`Telegram ${method} error`, {
-      error: err instanceof Error ? err.message : String(err),
+    return {
+      ok: false,
+      network: true,
+      description: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+async function callApi<T>(
+  method: string,
+  body?: Record<string, unknown>
+): Promise<T | null> {
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    logger.warn(`Telegram ${method} skipped — no bot token`);
+    return null;
+  }
+
+  const result = await callApiDetailed<T>(method, body);
+  if (!result.ok) {
+    logger.error(`Telegram ${method} ${result.network ? 'error' : 'failed'}`, {
+      code: result.code,
+      description: result.description,
     });
     return null;
   }
+  return result.result;
+}
+
+export type PinFailure = 'missing' | 'forbidden' | 'transient' | 'unknown';
+
+export type PinResult = { ok: true } | { ok: false; reason: PinFailure; description?: string };
+
+/**
+ * Why did pinning fail? Only `missing` means the message is gone and should be
+ * re-created. A permissions problem or a network blip says nothing about the
+ * message, and re-sending on those would spam the group on every restart.
+ */
+export function classifyPinFailure(failure: {
+  code?: number;
+  description?: string;
+  network?: boolean;
+}): PinFailure {
+  const d = (failure.description ?? '').toLowerCase();
+
+  if (failure.network || failure.code === 429 || (failure.code !== undefined && failure.code >= 500)) {
+    return 'transient';
+  }
+  if (d.includes('message to pin not found') || d.includes('message_id_invalid')) {
+    return 'missing';
+  }
+  if (
+    failure.code === 403 ||
+    d.includes('not enough rights') ||
+    d.includes('admin_required') ||
+    d.includes('chat not found') ||
+    d.includes('not a member') ||
+    d.includes('was kicked')
+  ) {
+    return 'forbidden';
+  }
+  return 'unknown';
+}
+
+export type ProbeResult =
+  | { state: 'exists' }
+  | { state: 'missing' }
+  | { state: 'unknown'; reason: PinFailure; description?: string };
+
+/**
+ * Re-sending a message's own keyboard is a way to ask "does it still exist?"
+ * without changing anything visible: Telegram answers "message is not
+ * modified" for a live message and "message to edit not found" for a deleted one.
+ */
+export function classifyProbeFailure(failure: {
+  code?: number;
+  description?: string;
+  network?: boolean;
+}): ProbeResult {
+  const d = (failure.description ?? '').toLowerCase();
+
+  if (d.includes('message is not modified')) return { state: 'exists' };
+  if (d.includes('message to edit not found') || d.includes('message_id_invalid')) {
+    return { state: 'missing' };
+  }
+  return {
+    state: 'unknown',
+    reason: classifyPinFailure(failure),
+    description: failure.description,
+  };
+}
+
+export interface BotMembership {
+  isAdmin: boolean;
+  canPin: boolean;
 }
 
 export interface TgMessage {
@@ -54,6 +146,12 @@ export interface TgUpdate {
     text?: string;
     chat: { id: number; type: string };
     from?: { id: number; username?: string; first_name?: string; last_name?: string };
+  };
+  my_chat_member?: {
+    chat: { id: number; type: string; title?: string };
+    from?: { id: number; username?: string };
+    old_chat_member: { status: string };
+    new_chat_member: { status: string };
   };
   callback_query?: {
     id: string;
@@ -111,6 +209,82 @@ export const TelegramService = {
     return result !== null;
   },
 
+  /** Pins silently and reports *why* it failed, so callers can tell a deleted message from a permissions problem. */
+  async tryPinChatMessage(chatId: string | number, messageId: number): Promise<PinResult> {
+    const result = await callApiDetailed('pinChatMessage', {
+      chat_id: chatId,
+      message_id: messageId,
+      disable_notification: true,
+    });
+    if (result.ok) return { ok: true };
+    return {
+      ok: false,
+      reason: classifyPinFailure(result),
+      description: result.description,
+    };
+  },
+
+  async unpinChatMessage(chatId: string | number, messageId: number): Promise<boolean> {
+    const result = await callApiDetailed('unpinChatMessage', {
+      chat_id: chatId,
+      message_id: messageId,
+    });
+    return result.ok;
+  },
+
+  async deleteMessage(chatId: string | number, messageId: number): Promise<boolean> {
+    const result = await callApiDetailed('deleteMessage', {
+      chat_id: chatId,
+      message_id: messageId,
+    });
+    return result.ok;
+  },
+
+  /** Does the bot's message still exist? Changes nothing visible. */
+  async probeMessage(
+    chatId: string | number,
+    messageId: number,
+    replyMarkup: unknown
+  ): Promise<ProbeResult> {
+    const result = await callApiDetailed('editMessageReplyMarkup', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    });
+    return result.ok ? { state: 'exists' } : classifyProbeFailure(result);
+  },
+
+  /**
+   * The message currently pinned on top of the chat: its id, `null` when
+   * nothing is pinned, `undefined` when it could not be read.
+   */
+  async getPinnedMessageId(chatId: string | number): Promise<number | null | undefined> {
+    const result = await callApiDetailed<{ pinned_message?: { message_id: number } }>('getChat', {
+      chat_id: chatId,
+    });
+    if (!result.ok) return undefined;
+    return result.result?.pinned_message?.message_id ?? null;
+  },
+
+  /** What the bot may do in a chat. `null` when Telegram would not say. */
+  async getBotMembership(chatId: string | number): Promise<BotMembership | null> {
+    const me = await callApiDetailed<{ id: number }>('getMe');
+    if (!me.ok || !me.result) return null;
+
+    const member = await callApiDetailed<{ status: string; can_pin_messages?: boolean }>(
+      'getChatMember',
+      { chat_id: chatId, user_id: me.result.id }
+    );
+    if (!member.ok || !member.result) return null;
+
+    const { status, can_pin_messages } = member.result;
+    const isCreator = status === 'creator';
+    return {
+      isAdmin: isCreator || status === 'administrator',
+      canPin: isCreator || (status === 'administrator' && can_pin_messages === true),
+    };
+  },
+
   async answerCallbackQuery(
     callbackQueryId: string,
     text?: string,
@@ -128,7 +302,7 @@ export const TelegramService = {
     const result = await callApi<TgUpdate[]>('getUpdates', {
       offset,
       timeout,
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'my_chat_member'],
     });
     return result ?? [];
   },
@@ -141,7 +315,7 @@ export const TelegramService = {
     const result = await callApi('setWebhook', {
       url,
       secret_token: secretToken,
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: ['message', 'callback_query', 'my_chat_member'],
     });
     return result !== null;
   },

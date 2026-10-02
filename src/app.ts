@@ -11,11 +11,9 @@ import authRoutes from './modules/auth/auth.routes.js';
 import {
   categoryPublicRoutes,
   categoryAdminRoutes,
-} from './modules/categories/category.routes.js';
-import {
   productPublicRoutes,
   productAdminRoutes,
-} from './modules/products/product.routes.js';
+} from './modules/catalog/catalog.routes.js';
 import cartRoutes from './modules/cart/cart.routes.js';
 import {
   orderCustomerRoutes,

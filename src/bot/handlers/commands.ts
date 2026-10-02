@@ -2,6 +2,7 @@ import { handleStart } from '../commands/start.js';
 import { handleOrders } from '../commands/orders.js';
 import { handleToday } from '../commands/today.js';
 import { handleSetup } from '../commands/setup.js';
+import { handleCheck } from '../commands/check.js';
 import { AdminModel } from '../../modules/admins/admin.model.js';
 import { hasPermission } from '../../shared/permissions.js';
 import type { AdminRoleType } from '../../modules/admins/admin.model.js';
@@ -25,7 +26,13 @@ export async function handleCommand(
     return;
   }
 
-  if (cmd === '/orders' || cmd === '/today' || cmd === '/setup' || cmd === '/statistics') {
+  if (
+    cmd === '/orders' ||
+    cmd === '/today' ||
+    cmd === '/setup' ||
+    cmd === '/check' ||
+    cmd === '/statistics'
+  ) {
     if (!fromId || !(await isTelegramAdmin(fromId))) {
       await TelegramService.sendMessage(chatId, '⛔ Bu buyruq faqat adminlar uchun.');
       return;
@@ -42,6 +49,10 @@ export async function handleCommand(
   }
   if (cmd === '/setup') {
     await handleSetup(chatId);
+    return;
+  }
+  if (cmd === '/check') {
+    await handleCheck(chatId);
     return;
   }
 }

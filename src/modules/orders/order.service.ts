@@ -1,8 +1,9 @@
-import mongoose from 'mongoose';
 import { OrderModel } from './order.model.js';
 import { OrderRepository } from './order.repository.js';
 import { CartRepository } from '../cart/cart.repository.js';
-import { ProductRepository } from '../products/product.repository.js';
+import { CatalogService } from '../catalog/catalog.service.js';
+import { catalogIdSchema } from '../catalog/catalog.validation.js';
+import { priceProduct } from '../catalog/catalog.pricing.js';
 import { UserRepository } from '../users/user.repository.js';
 import { generateOrderNumber } from './orderNumber.js';
 import { assertTransition } from './order.transitions.js';
@@ -45,7 +46,7 @@ function toDto(doc: Record<string, unknown>) {
 }
 
 type OrderItemBuilt = {
-  productId: mongoose.Types.ObjectId;
+  productId: string;
   name: string;
   variantName?: string;
   quantity: number;
@@ -92,8 +93,11 @@ export const OrderService = {
 
     const orderItems: OrderItemBuilt[] = [];
 
+    // One snapshot for the whole order: every line is priced from the same catalog.
+    const findProduct = await CatalogService.lookup();
+
     for (const item of cart.items) {
-      const product = await ProductRepository.findById(String(item.productId));
+      const product = findProduct(String(item.productId));
       if (!product) {
         throw new ValidationError(`Product no longer exists: ${item.name}`);
       }
@@ -101,18 +105,9 @@ export const OrderService = {
         throw new ValidationError(`Product not available: ${item.name}`);
       }
 
-      let price = product.price;
-      let name =
-        typeof product.name === 'object' && product.name && 'uz' in product.name
-          ? String((product.name as { uz: string }).uz)
-          : item.name;
-
-      if (item.variantName && product.variants?.length) {
-        const variant = product.variants.find((v) => v.name === item.variantName);
-        if (!variant) throw new ValidationError(`Invalid variant for ${name}`);
-        price = variant.price;
-        name = `${name} (${variant.name})`;
-      }
+      // The price and name written on the order are the catalog's, as of now —
+      // not whatever the cart remembered from when the item was added.
+      const priced = priceProduct(product, item.variantName);
 
       if (item.quantity < 1 || item.quantity > 50) {
         throw new ValidationError('Invalid quantity');
@@ -120,11 +115,11 @@ export const OrderService = {
 
       orderItems.push({
         productId: product._id,
-        name,
-        variantName: item.variantName ?? undefined,
+        name: priced.name,
+        variantName: priced.variantName,
         quantity: item.quantity,
-        price,
-        image: product.images?.[0] || item.image || undefined,
+        price: priced.unitPrice,
+        image: product.images[0] || item.image || undefined,
         cakeMessage: item.cakeMessage
           ? sanitizePlainText(item.cakeMessage, 150)
           : undefined,
@@ -244,17 +239,21 @@ export const OrderService = {
       }
     }
 
-    const product = await ProductRepository.findById(input.productId);
+    if (!catalogIdSchema.safeParse(input.productId).success) {
+      throw new NotFoundError('Product not found');
+    }
+
+    const product = (await CatalogService.lookup())(input.productId);
     if (!product) throw new NotFoundError('Product not found');
     if (!product.isAvailable) throw new ValidationError('Product not available');
 
     const qty = Math.min(50, Math.max(1, input.quantity || 1));
-    const name =
-      typeof product.name === 'object' && product.name && 'uz' in product.name
-        ? String((product.name as { uz: string }).uz)
-        : String(product.name || 'Mahsulot');
+    // Quick order has no size picker; a product that requires one can't be
+    // priced here and priceProduct says so.
+    const priced = priceProduct(product);
+    const name = priced.name;
 
-    const price = product.price;
+    const price = priced.unitPrice;
     const subtotal = price * qty;
     const deliveryFee = 0;
     const total = subtotal + deliveryFee;
@@ -282,7 +281,7 @@ export const OrderService = {
               name,
               quantity: qty,
               price,
-              image: product.images?.[0],
+              image: product.images[0],
               cakeMessage: input.cakeMessage
                 ? sanitizePlainText(input.cakeMessage, 150)
                 : undefined,

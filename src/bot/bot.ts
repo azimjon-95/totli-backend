@@ -3,7 +3,12 @@ import { TelegramService, type TgUpdate } from '../infrastructure/telegram/Teleg
 import { logger } from '../infrastructure/logger/index.js';
 import { handleCommand } from './handlers/commands.js';
 import { handleCallback } from './handlers/callbacks.js';
-import { ensureWebAppMessage } from './services/groupMessage.js';
+import { handleBotMembershipChange } from './handlers/membership.js';
+import {
+  ensureWebAppMessage,
+  startWebAppMessageWatchdog,
+  stopWebAppMessageWatchdog,
+} from './services/groupMessage.js';
 
 let polling = false;
 let offset = 0;
@@ -13,6 +18,14 @@ async function processUpdate(update: TgUpdate) {
   try {
     if (update.callback_query) {
       await handleCallback(update);
+      return;
+    }
+    if (update.my_chat_member) {
+      await handleBotMembershipChange(update.my_chat_member, {
+        groupId: env.TELEGRAM_GROUP_ID,
+        ensure: () => ensureWebAppMessage(false),
+        log: logger,
+      });
       return;
     }
     const msg = update.message;
@@ -59,12 +72,18 @@ export async function startBot(): Promise<void> {
   // Prefer long polling in development; production can use webhook later
   await TelegramService.deleteWebhook();
 
-  // Ensure group pinned message (non-blocking)
-  ensureWebAppMessage(false).catch((err) => {
-    logger.warn('ensureWebAppMessage failed', {
-      error: err instanceof Error ? err.message : String(err),
+  // Ensure the group's pinned message (non-blocking), then re-check it daily.
+  // Started before the webhook/polling branch so both modes get the daily check.
+  ensureWebAppMessage(false)
+    .then((result) => {
+      if (!result.ok) logger.warn('ensureWebAppMessage reported a problem', { error: result.error });
+    })
+    .catch((err) => {
+      logger.warn('ensureWebAppMessage failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
-  });
+  startWebAppMessageWatchdog();
 
   if (isProd && process.env.TELEGRAM_WEBHOOK_URL) {
     const ok = await TelegramService.setWebhook(process.env.TELEGRAM_WEBHOOK_URL);
@@ -78,6 +97,7 @@ export async function startBot(): Promise<void> {
 
 export async function stopBot(): Promise<void> {
   stopped = true;
+  stopWebAppMessageWatchdog();
   // Wait briefly for loop to exit
   for (let i = 0; i < 30 && polling; i++) {
     await new Promise((r) => setTimeout(r, 100));

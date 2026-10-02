@@ -12,7 +12,8 @@ export const ORDER_STATUSES = [
 
 const orderItemSchema = new Schema(
   {
-    productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+    // LokmaGo dish id — an opaque external string, not a reference to a local collection.
+    productId: { type: String, required: true },
     name: { type: String, required: true },
     variantName: { type: String },
     quantity: { type: Number, required: true, min: 1 },

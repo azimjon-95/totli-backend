@@ -1,5 +1,5 @@
 import { OrderModel } from '../orders/order.model.js';
-import { ProductModel } from '../products/product.model.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import { UserModel } from '../users/user.model.js';
 
 function startOfDay(d = new Date()) {
@@ -45,7 +45,8 @@ export const StatisticsService = {
         .limit(10)
         .select('orderNumber customerName customerPhone status total items createdAt')
         .lean(),
-      ProductModel.countDocuments(),
+      // The dashboard must not fail because the catalog source is down.
+      CatalogService.countProducts().catch(() => 0),
       UserModel.countDocuments(),
     ]);
 
