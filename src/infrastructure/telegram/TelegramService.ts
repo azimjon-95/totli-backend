@@ -128,6 +128,15 @@ export function classifyProbeFailure(failure: {
   };
 }
 
+export interface BotInfo {
+  id: number;
+  username?: string;
+  /** The bot has a Main Mini App configured in @BotFather (Bot API 7.8+). */
+  hasMainWebApp: boolean;
+}
+
+export type SendResult = { ok: true; message: TgMessage } | { ok: false; error: string };
+
 export interface BotMembership {
   isAdmin: boolean;
   canPin: boolean;
@@ -161,6 +170,9 @@ export interface TgUpdate {
   };
 }
 
+const BOT_INFO_TTL_MS = 10 * 60_000;
+let botInfoCache: { at: number; info: BotInfo } | null = null;
+
 export const TelegramService = {
   isConfigured(): boolean {
     return Boolean(env.TELEGRAM_BOT_TOKEN);
@@ -182,6 +194,44 @@ export const TelegramService = {
       reply_markup: options?.reply_markup,
       disable_web_page_preview: options?.disable_web_page_preview ?? true,
     });
+  },
+
+  /** Like `sendMessage`, but says *why* a send failed (e.g. `BUTTON_TYPE_INVALID`). */
+  async trySendMessage(
+    chatId: string | number,
+    text: string,
+    options?: { parse_mode?: string; reply_markup?: unknown }
+  ): Promise<SendResult> {
+    const result = await callApiDetailed<TgMessage>('sendMessage', {
+      chat_id: chatId,
+      text,
+      parse_mode: options?.parse_mode ?? 'HTML',
+      reply_markup: options?.reply_markup,
+      disable_web_page_preview: true,
+    });
+    if (result.ok && result.result) return { ok: true, message: result.result };
+    return {
+      ok: false,
+      error: result.ok ? 'empty response' : (result.description ?? 'unknown error'),
+    };
+  },
+
+  /** Who the bot is. Cached for a few minutes: a username never changes, but enabling the Main Mini App should be noticed without a restart. */
+  async getBotInfo(): Promise<BotInfo | null> {
+    if (botInfoCache && Date.now() - botInfoCache.at < BOT_INFO_TTL_MS) return botInfoCache.info;
+
+    const me = await callApiDetailed<{ id: number; username?: string; has_main_web_app?: boolean }>(
+      'getMe'
+    );
+    if (!me.ok || !me.result) return botInfoCache?.info ?? null;
+
+    const info: BotInfo = {
+      id: me.result.id,
+      username: me.result.username,
+      hasMainWebApp: me.result.has_main_web_app === true,
+    };
+    botInfoCache = { at: Date.now(), info };
+    return info;
   },
 
   async editMessageText(
@@ -268,12 +318,12 @@ export const TelegramService = {
 
   /** What the bot may do in a chat. `null` when Telegram would not say. */
   async getBotMembership(chatId: string | number): Promise<BotMembership | null> {
-    const me = await callApiDetailed<{ id: number }>('getMe');
-    if (!me.ok || !me.result) return null;
+    const me = await TelegramService.getBotInfo();
+    if (!me) return null;
 
     const member = await callApiDetailed<{ status: string; can_pin_messages?: boolean }>(
       'getChatMember',
-      { chat_id: chatId, user_id: me.result.id }
+      { chat_id: chatId, user_id: me.id }
     );
     if (!member.ok || !member.result) return null;
 

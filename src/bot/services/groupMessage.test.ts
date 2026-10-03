@@ -9,9 +9,10 @@ import {
   type WebAppMessageDeps,
 } from './groupMessage.js';
 import type { BotMembership, PinResult, ProbeResult } from '../../infrastructure/telegram/TelegramService.js';
+import type { GroupLink } from '../keyboards/main.js';
 
 const GROUP = '-1002451334889';
-const KEYBOARD = { inline_keyboard: [[{ text: 'open', web_app: { url: 'https://x' } }]] };
+const KEYBOARD = { inline_keyboard: [[{ text: 'open', url: 'https://t.me/totli_bot?startapp' }]] };
 
 /** A tiny fake Telegram group, with a call log. */
 function world(init: Partial<{
@@ -23,7 +24,8 @@ function world(init: Partial<{
   pin: PinResult;
   group: string | undefined;
   token: boolean;
-  sendFails: boolean;
+  sendError: string;
+  keyboardMode: GroupLink['mode'] | null;
 }> = {}) {
   const w = {
     saved: init.saved ?? null,
@@ -47,10 +49,10 @@ function world(init: Partial<{
     },
     send: async () => {
       w.calls.push('send');
-      if (init.sendFails) return null;
+      if (init.sendError) return { ok: false, error: init.sendError };
       const id = w.nextId++;
       w.messages.add(id);
-      return { message_id: id, chat: { id: -1 } };
+      return { ok: true, message: { message_id: id, chat: { id: -1 } } };
     },
     probe: async (_chat, id, markup) => {
       w.calls.push('probe');
@@ -76,7 +78,8 @@ function world(init: Partial<{
       w.messages.delete(id);
       return true;
     },
-    keyboard: () => KEYBOARD,
+    keyboard: async () =>
+      init.keyboardMode === null ? null : { markup: KEYBOARD, mode: init.keyboardMode ?? 'direct' },
     log: { info() {}, warn() {} },
   };
 
@@ -98,11 +101,22 @@ describe('ensure — the first run', () => {
     assert.equal(w.pinned, 500);
   });
 
-  it('reports a failure to send without saving anything', async () => {
-    const { w, ensurer } = world({ sendFails: true });
+  it("reports why a send failed, in Telegram's own words, and saves nothing", async () => {
+    const { w, ensurer } = world({ sendError: 'Bad Request: BUTTON_TYPE_INVALID' });
+    const result = await ensurer.ensure();
+
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? '', /BUTTON_TYPE_INVALID/);
+    assert.equal(w.saved, null);
+    assert.equal(w.calls.includes('pin'), false);
+  });
+
+  it('does nothing when the button cannot be built (bot username unknown)', async () => {
+    const { w, ensurer } = world({ keyboardMode: null });
     const result = await ensurer.ensure();
     assert.equal(result.ok, false);
-    assert.equal(w.saved, null);
+    assert.match(result.error ?? '', /username/);
+    assert.deepEqual(w.calls, []);
   });
 
   it('does nothing without a group id or a bot token', async () => {
@@ -301,6 +315,25 @@ describe('check — reports without touching anything', () => {
     const status = await ensurer.check();
     assert.ok(status.problems.some((p) => p.includes("o'qib bo'lmadi")));
     assert.ok(!status.problems.some((p) => p.includes('pin qilinmagan')));
+  });
+
+  it('says so when the button only leads to the bot chat (no Main Mini App)', async () => {
+    const { ensurer } = world({ ...ALL_OK, keyboardMode: 'via-chat' });
+    const status = await ensurer.check();
+    assert.equal(status.ok, true, 'it works, just with an extra tap');
+    assert.ok(status.notes.some((n) => n.includes('Main Mini App')));
+  });
+
+  it('is silent about that when the button opens the Mini App directly', async () => {
+    const { ensurer } = world({ ...ALL_OK, keyboardMode: 'direct' });
+    assert.deepEqual((await ensurer.check()).notes, []);
+  });
+
+  it('flags a button that cannot be built', async () => {
+    const { ensurer } = world({ ...ALL_OK, keyboardMode: null });
+    const status = await ensurer.check();
+    assert.equal(status.ok, false);
+    assert.ok(status.problems.some((p) => p.includes('username')));
   });
 
   it('explains a missing configuration', async () => {

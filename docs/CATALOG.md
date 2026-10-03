@@ -139,7 +139,7 @@ Guruhda **bitta** pinlangan "Tortlarni ko'rish" (WebApp) tugmali xabar bo'ladi.
 
 - Yangi xabar **faqat** saqlangan xabar yo'q bo'lsa yoki Telegram "o'chirilgan" desa yuboriladi.
   Pin huquqi yo'qligi, tarmoq xatosi, rate limit — xabarni **qayta yaratmaydi** (guruh to'lib ketmasligi uchun).
-- Mavjudligi `editMessageReplyMarkup` bilan tekshiriladi (ko'rinadigan ta'sirsiz); `WEBAPP_URL`
+- Mavjudligi `editMessageReplyMarkup` bilan tekshiriladi (ko'rinadigan ta'sirsiz); havola
   o'zgargan bo'lsa tugma o'zi yangilanadi.
 - Guruh adminining o'z pini hurmat qilinadi: boshqa xabar pinlangan bo'lsa tegilmaydi.
   Faqat pin bo'sh bo'lsa, bizniki qaytariladi.
@@ -149,6 +149,16 @@ Guruhda **bitta** pinlangan "Tortlarni ko'rish" (WebApp) tugmali xabar bo'ladi.
 
 - `/check` — holatni ko'rsatadi (bot admin?, pin huquqi?, xabar bormi?, pinlanganmi?). Muammo bo'lsa va bot tuzata olsa, o'zi tuzatib qayta ko'rsatadi.
 - `/setup` — yangi xabarni majburan yuboradi va eskisini olib tashlaydi.
+
+**Tugma turi.** Telegram guruhda `web_app` tugmasini qabul qilmaydi (xabar `BUTTON_TYPE_INVALID`
+bilan rad etiladi), shuning uchun guruh xabarida oddiy `url` tugma bor. U quyidagi tartibda tanlanadi:
+
+1. `WEBAPP_DIRECT_LINK` (masalan `https://t.me/<bot>/<app>`);
+2. botda **Main Mini App** yoqilgan bo'lsa `https://t.me/<bot>?startapp` — Mini App guruhning o'zida ochiladi;
+3. aks holda `https://t.me/<bot>?start=shop` — botning shaxsiy chatiga olib boradi (2 bosish). `/check` bu haqda ogohlantiradi.
+
+Main Mini App yoqish: @BotFather → `/mybots` → botni tanlang → *Bot Settings* → *Configure Mini App* →
+*Enable Mini App* → URL: `WEBAPP_URL` dagi manzil.
 
 **Guruh sozlash:** botni guruhga qo'shing → **admin** qiling va "Xabarlarni pin qilish" huquqini bering.
 Shundan keyin pin xabari o'zi paydo bo'ladi.

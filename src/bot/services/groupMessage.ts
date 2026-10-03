@@ -4,11 +4,11 @@ import {
   type BotMembership,
   type PinResult,
   type ProbeResult,
-  type TgMessage,
+  type SendResult,
 } from '../../infrastructure/telegram/TelegramService.js';
 import { getSetting, setSetting } from '../../modules/notifications/settings.model.js';
 import { logger } from '../../infrastructure/logger/index.js';
-import { mainWebAppKeyboard } from '../keyboards/main.js';
+import { groupWebAppKeyboard, type GroupLink } from '../keyboards/main.js';
 
 const SETTING_KEY = 'group_webapp_message_id';
 
@@ -51,7 +51,7 @@ export interface WebAppMessageDeps {
   botConfigured(): boolean;
   getSavedId(): Promise<number | null>;
   saveId(id: number): Promise<void>;
-  send(chatId: string, text: string, replyMarkup: unknown): Promise<TgMessage | null>;
+  send(chatId: string, text: string, replyMarkup: unknown): Promise<SendResult>;
   /** Does the message still exist? Must not change anything visible. */
   probe(chatId: string, messageId: number, replyMarkup: unknown): Promise<ProbeResult>;
   getPinnedId(chatId: string): Promise<number | null | undefined>;
@@ -59,7 +59,8 @@ export interface WebAppMessageDeps {
   pin(chatId: string, messageId: number): Promise<PinResult>;
   unpin(chatId: string, messageId: number): Promise<boolean>;
   remove(chatId: string, messageId: number): Promise<boolean>;
-  keyboard(): unknown;
+  /** The group's button. `null` when it can't be built (the bot's username is unknown). */
+  keyboard(): Promise<{ markup: unknown; mode: GroupLink['mode'] } | null>;
   log: {
     info(message: string, meta?: Record<string, unknown>): void;
     warn(message: string, meta?: Record<string, unknown>): void;
@@ -92,12 +93,20 @@ export function createWebAppMessageEnsurer(deps: WebAppMessageDeps) {
     if (!groupId) return { ok: false, error: 'TELEGRAM_GROUP_ID not set' };
     if (!deps.botConfigured()) return { ok: false, error: 'Bot token not configured' };
 
+    const keyboard = await deps.keyboard();
+    if (!keyboard) {
+      return {
+        ok: false,
+        error: "Botning username'i aniqlanmadi (TELEGRAM_BOT_USERNAME yoki WEBAPP_DIRECT_LINK kerak)",
+      };
+    }
+
     const savedId = await deps.getSavedId();
 
     if (savedId && !force) {
       // Re-sending the message's own keyboard doubles as an existence check
-      // and heals the button if WEBAPP_URL has changed since it was sent.
-      const probe = await deps.probe(groupId, savedId, deps.keyboard());
+      // and heals the button if the link has changed since it was sent.
+      const probe = await deps.probe(groupId, savedId, keyboard.markup);
 
       if (probe.state === 'unknown') {
         log.warn('Could not check the group WebApp message — leaving it as is', {
@@ -150,8 +159,13 @@ export function createWebAppMessageEnsurer(deps: WebAppMessageDeps) {
       log.warn('Group WebApp message was deleted — recreating', { messageId: savedId });
     }
 
-    const message = await deps.send(groupId, WEBAPP_MESSAGE_TEXT, deps.keyboard());
-    if (!message) return { ok: false, error: 'Failed to send group message' };
+    const sent = await deps.send(groupId, WEBAPP_MESSAGE_TEXT, keyboard.markup);
+    if (!sent.ok) {
+      log.warn('Could not send the group WebApp message', { error: sent.error });
+      // Telegram's own wording, so the cause is visible in /check and /setup.
+      return { ok: false, error: `Xabar yuborilmadi: ${sent.error}` };
+    }
+    const message = sent.message;
 
     // Remember the id before anything else can fail: if it were lost, the next
     // run would see "nothing saved" and send a second message.
@@ -226,10 +240,19 @@ export function createWebAppMessageEnsurer(deps: WebAppMessageDeps) {
       else if (!membership.canPin) problems.push('Botda xabarlarni pin qilish huquqi yo‘q');
     }
 
+    const keyboard = await deps.keyboard();
+    if (!keyboard) {
+      problems.push("Botning username'i aniqlanmadi (TELEGRAM_BOT_USERNAME yoki WEBAPP_DIRECT_LINK kerak)");
+    } else if (keyboard.mode === 'via-chat') {
+      notes.push(
+        "Tugma botning shaxsiy chatiga olib boradi (2 bosish). Bevosita ochilishi uchun @BotFather da Main Mini App yoqing yoki WEBAPP_DIRECT_LINK bering"
+      );
+    }
+
     if (savedMessageId === null) {
       problems.push('WebApp xabari hali yuborilmagan');
-    } else {
-      const probe = await deps.probe(groupId, savedMessageId, deps.keyboard());
+    } else if (keyboard) {
+      const probe = await deps.probe(groupId, savedMessageId, keyboard.markup);
       status.exists = probe.state === 'exists';
 
       if (probe.state === 'missing') {
@@ -275,14 +298,14 @@ const ensurer = createWebAppMessageEnsurer({
   getSavedId: () => getSetting<number>(SETTING_KEY),
   saveId: (id) => setSetting(SETTING_KEY, id),
   send: (chatId, text, replyMarkup) =>
-    TelegramService.sendMessage(chatId, text, { reply_markup: replyMarkup }),
+    TelegramService.trySendMessage(chatId, text, { reply_markup: replyMarkup }),
   probe: (chatId, messageId, markup) => TelegramService.probeMessage(chatId, messageId, markup),
   getPinnedId: (chatId) => TelegramService.getPinnedMessageId(chatId),
   membership: (chatId) => TelegramService.getBotMembership(chatId),
   pin: (chatId, messageId) => TelegramService.tryPinChatMessage(chatId, messageId),
   unpin: (chatId, messageId) => TelegramService.unpinChatMessage(chatId, messageId),
   remove: (chatId, messageId) => TelegramService.deleteMessage(chatId, messageId),
-  keyboard: () => mainWebAppKeyboard(),
+  keyboard: () => groupWebAppKeyboard(),
   log: logger,
 });
 

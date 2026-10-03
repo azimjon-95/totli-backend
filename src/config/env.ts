@@ -21,6 +21,8 @@ const envSchema = z.object({
   TELEGRAM_GROUP_ID: z.string().optional(),
   ADMIN_CHAT_ID: z.string().optional(),
   WEBAPP_URL: z.string().optional(),
+  // Guruhdagi pin tugmasi uchun Mini App havolasi (masalan https://t.me/totli_bot/shop). Bo'sh bo'lsa botning Main Mini App havolasi ishlatiladi.
+  WEBAPP_DIRECT_LINK: z.string().optional(),
   ADMIN_URL: z.string().optional(),
 
   // Mini App'dagi qo'ng'iroq tugmasi shu raqamga tel: havolasi ochadi.
